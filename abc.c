@@ -2,7 +2,7 @@
 This program was created by the
 CodeWizardAVR V3.12 Advanced
 Automatic Program Generator
-� Copyright 1998-2014 Pavel Haiduc, HP InfoTech s.r.l.
+? Copyright 1998-2014 Pavel Haiduc, HP InfoTech s.r.l.
 http://www.hpinfotech.com
 
 Project :
@@ -29,14 +29,12 @@ Data Stack size         : 512
 #include <i2c.h>
 #include <stdio.h>
 #include <stdint.h>
-#include <util/atomic.h>
 #asm
 .equ __sda_bit = 4
                      .equ __scl_bit = 5
                                           //.equ __i2c_port=0x1b ;PORTA
                                           //.equ __i2c_port=0x18 ;PORTB
                                           .equ __i2c_port = 0x15;
-PORTC
 //.equ __i2c_port=0x12 ;PORT
 #endasm
 // Declare your global variables here
@@ -73,7 +71,7 @@ char _i2c_read()
 }
 void _i2c_stop(void)
 {
-    TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN); // G?i t�n hi?u d?ng
+    TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN); // G?i t?n hi?u d?ng
 }
 
 bit lbl = 1;
@@ -108,8 +106,8 @@ bit lbl = 1;
 #define DHTLIB_OK 0
 #define DHTLIB_ERROR_CHECKSUM -1
 #define DHTLIB_ERROR_TIMEOUT -2
-#define TOLERANCE_TEMP 0.6
-#define TOLERANCE_HUM 0.8
+#define tolerance_temp 0.6
+#define tolerance_hum 0.8
 enum stateMain
 {
     HIGH_MODE = 0,
@@ -119,13 +117,13 @@ enum stateMain
 int stateTemp = NORMAL;
 int stateHum = NORMAL;
 float setupTemp;
-float setupHum;
+int setupHum;
 float RealSetupT;
 float RealSetupH;
 uint8_t error = 0;
 uint8_t hum_now;
 int count_state_setup = 0;
-
+uint8_t first_init = 0;
 unsigned int base_y[5] = {0x00, 0x80, 0xC0, 0x94, 0xD4};
 volatile unsigned long timer1_millis = 0;
 unsigned long millis()
@@ -133,15 +131,10 @@ unsigned long millis()
     unsigned long millis_return;
 
     // Ensure this cannot be disrupted
-    ATOMIC_BLOCK(ATOMIC_FORCEON)
-    {
-        millis_return = timer1_millis;
-    }
+
+    millis_return = timer1_millis;
+
     return millis_return;
-}
-ISR(TIMER1_COMPA_vect)
-{
-    timer1_millis++;
 }
 
 void init_millis(unsigned long f_cpu)
@@ -167,14 +160,14 @@ void ProcessBut()
     if (count_state_setup != 0)
     {
         if (!(BUT_PIN & (1 << BUT_UP_PIN)))
-        { // Ki?m tra n?u n�t b?m UP
+        { // Ki?m tra n?u n?t b?m UP
             if (hum_now)
                 setupTemp += 1;
             else
                 setupHum += 1;
         }
         else if (!(BUT_PIN & (1 << BUT_DOWN_PIN)))
-        { // Ki?m tra n?u n�t b?m DOWN
+        { // Ki?m tra n?u n?t b?m DOWN
             if (hum_now)
                 setupTemp -= 1;
             else
@@ -184,39 +177,42 @@ void ProcessBut()
 }
 void FAN_SET(uint8_t on_off)
 {
-    if(on_off==ON)
+    if (on_off == ON)
     {
-        PORTD|=(1<<FAN_PIN);
+        PORTD |= (1 << FAN_PIN);
     }
-    else{
-        PORTD&=~(1<<FAN_PIN);
+    else
+    {
+        PORTD &= ~(1 << FAN_PIN);
     }
 }
 void TEMP_COIL_SET(uint8_t on_off)
 {
-    if(on_off==ON)
+    if (on_off == ON)
     {
-        PORTD|=(1<<COIL_PIN);
+        PORTD |= (1 << COIL_PIN);
     }
-    else{
-        PORTD&=~(1<<COIL_PIN);
+    else
+    {
+        PORTD &= ~(1 << COIL_PIN);
     }
 }
 void PHUN_SUONG(uint8_t on_off)
 {
-    if(on_off==ON)
+    if (on_off == ON)
     {
-        PORTD|=(1<<PHUN_SUONG_PIN);
+        PORTD |= (1 << PHUN_SUONG_PIN);
     }
-    else{
-        PORTD&=~(1<<PHUN_SUONG_PIN);
+    else
+    {
+        PORTD &= ~(1 << PHUN_SUONG_PIN);
     }
 }
 int dht11_read(uint8_t *humidity, float *temperature)
 {
     uint8_t DHT11Data[5];
     uint8_t sensor_bytes, bits, buffer = 0, timeout = 0, checksum;
-
+    float temp;
     //
     DHT11_OUTPUT_MODE(); //
     DHT11_LOW();         //
@@ -233,11 +229,11 @@ int dht11_read(uint8_t *humidity, float *temperature)
         return 0; //// no response
     }
 
-    // Ch? t�n hi?u HIGH t? c?m bi?n
+    // Ch? t?n hi?u HIGH t? c?m bi?n
     delay_us(80);
     if (!(DHT11_PINPORT & (1 << DHT11_PIN)))
     {
-        return 0; // L?i kh�ng nh?n du?c ph?n h?i
+        return 0; // L?i kh?ng nh?n du?c ph?n h?i
     }
 
     delay_us(80); // wait high
@@ -255,14 +251,14 @@ int dht11_read(uint8_t *humidity, float *temperature)
             }
             timeout = 0;
 
-            // �?c bit
+            // ??c bit
             delay_us(40); // Th?i gian d?c bit
             if (DHT11_PINPORT & (1 << DHT11_PIN))
             {
                 buffer |= (1 << (7 - bits)); // save to buffer
             }
 
-            // Ch? t�n hi?u HIGH k?t th�c
+            // Ch? t?n hi?u HIGH k?t th?c
             while (DHT11_PINPORT & (1 << DHT11_PIN))
             {
                 timeout++;
@@ -280,7 +276,7 @@ int dht11_read(uint8_t *humidity, float *temperature)
         return -1; // checksum
     }
     *humidity = DHT11Data[0];
-    float temp = DHT11Data[2];
+    temp = DHT11Data[2];
     if (DHT11Data[3] & 0x80)
     { // if sign bit is set (negative temperature)
         temp = -1 - temp;
@@ -350,11 +346,11 @@ void lcd_cmd(char cmd)
 void lcd_init(void)
 {
     _i2c_init();
-    // lcd_reset();         // Call LCD reset lcd_cmd(0�28);
+    // lcd_reset();         // Call LCD reset lcd_cmd(0?28);
     lcd_cmd(0x02); /* send for 4 bit initialization of LCD  */
     lcd_cmd(0x28);
-    lcd_cmd(0x0C); // Display no cursor � no blink.
-    lcd_cmd(0x06); // Automatic Increment � No Display shift.
+    lcd_cmd(0x0C); // Display no cursor ? no blink.
+    lcd_cmd(0x06); // Automatic Increment ? No Display shift.
     lcd_cmd(0x01);
     lcd_cmd(0x80); // Address DDRAM with 0 offset 80h.
 }
@@ -407,12 +403,19 @@ void lcd_backlighttoggle(void)
 }
 void lcd_cursor(void)
 {
-    lcd_cmd(0x0E); // Lệnh hiện con trỏ
+    lcd_cmd(0x0E); // L?nh hi?n con tr?
 }
-
+float fabs(float value)
+{
+    return (value < 0) ? -value : value;
+}
+int abs(int x)
+{
+    return (x < 0) ? -x : x;
+}
 void lcd_nocursor(void)
 {
-    lcd_cmd(0x0C); // Lệnh ẩn con trỏ
+    lcd_cmd(0x0C); // L?nh ?n con tr?
 }
 void LCD_String_xy(char pos, char row, char *str) /* Send string to LCD with xy position */
 {
@@ -561,6 +564,10 @@ void main(void)
         float temperature;
         char buffer[16];
         int status = 0;
+        int diff_hum;
+        float diff_temp;
+        int integer_part, decimal_part;
+        int integer_part2, decimal_part2;
         static uint8_t count_delay = 0;
         if (!(BUT_PIN & (1 << BUT_SETUP_PIN)))
         {
@@ -575,19 +582,32 @@ void main(void)
         status = dht11_read(&humidity, &temperature);
         if (status == 1)
         {
-            float diff_hum = RealSetupH - humidity;
-            float diff_temp = RealSetupT - temperature;
-            sprintf(buffer, "Tem:%f %f", temperature, setupTemp);
-            lcd.noCursor();
-            LCD_String_xy(0, 0, buffer);
-            sprintf(buffer, "Hum:%d%% %f", humidity, setupHum);
-            LCD_String_xy(0, 1, buffer);
+            lcd_nocursor();
+            if (first_init == 0)
+            {
+                RealSetupH = humidity;
+                RealSetupT = temperature;
+                setupTemp = temperature;
+                setupHum = humidity;
+                first_init = 1;
+            }
+            diff_hum = RealSetupH - (int)humidity;
+            diff_temp = RealSetupT - temperature;
+            integer_part = (int)temperature;
+            decimal_part = (int)((temperature - integer_part) * 100);
+            integer_part2 = (int)setupTemp;
+            decimal_part2 = (int)((setupTemp - integer_part) * 100);
+            sprintf(buffer, "Tem:%d.%02d %d", integer_part, decimal_part, (int)setupTemp);
 
-            if (fabs(diff_hum) < tolerance_hum)
+            LCD_String_xy(0, 1, buffer);
+            sprintf(buffer, "Humi:%d%% %d%", humidity, setupHum);
+            LCD_String_xy(0, 0, buffer);
+
+            if (abs(diff_hum) < 1)
                 stateHum = NORMAL;
-            else if (diff_hum > tolerance_hum)
+            else if (diff_hum > 1)
                 stateHum = LOW_MODE; // dif hum >0 va
-            else if (diff_hum < -tolerance_hum)
+            else if (diff_hum < -1)
                 stateHum = HIGH_MODE;
             if (fabs(diff_temp) < tolerance_temp)
                 stateTemp = NORMAL;
@@ -601,16 +621,18 @@ void main(void)
                 FAN_SET(ON);
                 TEMP_COIL_SET(OFF);
             }
-            else if (stateTemp == NORMAL)
+            else
             {
-                FAN_SET(OFF);
-                TEMP_COIL_SET(OFF);
-            }
-            else if (stateTemp == LOW_MODE)
-            {
-
-                FAN_SET(OFF);
-                TEMP_COIL_SET(ON);
+                if (stateTemp == NORMAL)
+                {
+                    FAN_SET(OFF);
+                    TEMP_COIL_SET(OFF);
+                }
+                else
+                {
+                    FAN_SET(OFF);
+                    TEMP_COIL_SET(ON);
+                }
             }
 
             if (stateHum == LOW_MODE)
@@ -619,12 +641,12 @@ void main(void)
                 PHUN_SUONG(OFF);
             if (count_state_setup != 0)
             {
-                lcd.lcd_gotoxy(11, hum_now);
-                lcd.cursor();
+                lcd_gotoxy(11, hum_now);
+                lcd_cursor();
             }
             else
             {
-                lcd.noCursor();
+                lcd_nocursor();
             }
 
             RealSetupT = setupTemp;
